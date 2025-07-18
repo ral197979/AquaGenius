@@ -1,0 +1,35 @@
+
+    /* General App Styling */
+    .stApp {
+        background-color: #F0F2F6;
+    }
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #FFFFFF;
+        border-right: 1px solid #E0E0E0;
+    }
+    /* Button Styling */
+    .stButton>button {
+        border-radius: 8px;
+        border: 1px solid #0068C9;
+        background-color: #0068C9;
+        color: white;
+        transition: all 0.2s ease-in-out;
+    }
+    .stButton>button:hover {
+        background-color: #0055A4;
+        border-color: #0055A4;
+    }
+    /* Metric Card Styling */
+    [data-testid="stMetric"] {
+        background-color: #FFFFFF;
+        border: 1px solid #E0E0E0;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+    }
+    /* Expander Styling */
+    .streamlit-expanderHeader {
+        font-weight: bold;
+    }
+    
