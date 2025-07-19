@@ -48,8 +48,8 @@ CHEMICAL_FACTORS = {
 # ==============================================================================
 # --- Session State Initialization ---
 # ==============================================================================
-if 'simulation_results' not in st.session_state:
-    st.session_state.simulation_results = None
+if 'simulation_data' not in st.session_state:
+    st.session_state.simulation_data = None
 
 # ==============================================================================
 # --- Sidebar for User Inputs ---
@@ -271,8 +271,10 @@ def generate_pfd_dot(inputs, sizing, results):
     separator = "Clarifier" if tech != 'MBR' else "Membrane Tank"
     
     if tech != 'MBBR':
-        ras_flow = results[f'RAS Flow ({flow_unit_label})']
-        was_flow = results[f'WAS Flow ({flow_unit_label})']
+        ras_flow_key = f'RAS Flow ({flow_unit_label})'
+        was_flow_key = f'WAS Flow ({flow_unit_label})'
+        ras_flow = results[ras_flow_key]
+        was_flow = results[was_flow_key]
         dot += f'Aerobic -> {separator};'
         dot += f'{separator} -> Effluent [label="{effluent_label}"];'
         dot += f'{separator} -> WAS [style=dashed, label="WAS\\n{was_flow:.2f} {flow_unit_label}"];'
@@ -328,16 +330,24 @@ def display_output(tech_name, inputs, sizing, results):
 # ==============================================================================
 if run_button:
     inputs = get_inputs()
-    all_results = {}
+    results_by_tech = {}
     for tech in ['cas', 'ifas', 'mbr', 'mbbr']:
         sizing_func = globals()[f"calculate_{tech}_sizing"]
         sizing = sizing_func(inputs)
         results = simulate_process(inputs, sizing)
-        all_results[tech] = {'sizing': sizing, 'results': results}
-    st.session_state.simulation_results = all_results
+        results_by_tech[tech] = {'sizing': sizing, 'results': results}
+    
+    # Store BOTH inputs and results in session state
+    st.session_state.simulation_data = {
+        'inputs': inputs,
+        'results_by_tech': results_by_tech
+    }
 
-if st.session_state.simulation_results:
-    inputs = get_inputs() # Re-get inputs to ensure units are current for display
+if st.session_state.simulation_data:
+    # Retrieve BOTH inputs and results from session state
+    stored_data = st.session_state.simulation_data
+    inputs = stored_data['inputs']
+    results_by_tech = stored_data['results_by_tech']
     
     cas_tab, ifas_tab, mbr_tab, mbbr_tab = st.tabs([
         "🔹 Conventional Activated Sludge (CAS)", 
@@ -347,20 +357,19 @@ if st.session_state.simulation_results:
     ])
 
     with cas_tab:
-        data = st.session_state.simulation_results['cas']
+        data = results_by_tech['cas']
         display_output('CAS', inputs, data['sizing'], data['results'])
     
     with ifas_tab:
-        data = st.session_state.simulation_results['ifas']
+        data = results_by_tech['ifas']
         display_output('IFAS', inputs, data['sizing'], data['results'])
 
     with mbr_tab:
-        data = st.session_state.simulation_results['mbr']
+        data = results_by_tech['mbr']
         display_output('MBR', inputs, data['sizing'], data['results'])
         
     with mbbr_tab:
-        data = st.session_state.simulation_results['mbbr']
+        data = results_by_tech['mbbr']
         display_output('MBBR', inputs, data['sizing'], data['results'])
 else:
     st.info("Please configure your influent criteria in the sidebar and click 'Generate Design & Simulate'.")
-
