@@ -826,7 +826,7 @@ def display_output(tech_name, inputs, sizing, results, rerun_key_prefix):
 
         st.subheader("Performance & Operational Summary (Initial Design)")
         results_df = pd.DataFrame.from_dict(results, orient='index', columns=['Value'])
-        results_df = results_df[results_df.apply(lambda x: isinstance(x[0], (int, float)) and x[0] > 0.01, axis=1)]
+        results_df = results_df[results_df.apply(lambda x: isinstance(x.iloc[0], (int, float)) and x.iloc[0] > 0.01, axis=1)]
         st.dataframe(results_df.style.format("{:,.2f}"))
 
         pdf_data = generate_detailed_pdf_report(inputs, sizing, results)
@@ -902,7 +902,7 @@ def display_output(tech_name, inputs, sizing, results, rerun_key_prefix):
         rerun_data = st.session_state.rerun_results[rerun_key_prefix]
         st.subheader("Adjusted Performance Summary")
         rerun_df = pd.DataFrame.from_dict(rerun_data, orient='index', columns=['Value'])
-        rerun_df = rerun_df[rerun_df.apply(lambda x: isinstance(x[0], (int, float)) and x[0] > 0.01, axis=1)]
+        rerun_df = rerun_df[rerun_df.apply(lambda x: isinstance(x.iloc[0], (int, float)) and x.iloc[0] > 0.01, axis=1)]
         st.dataframe(rerun_df.style.format("{:,.2f}"))
 
         st.subheader("Adjusted Process Flow Diagram")
