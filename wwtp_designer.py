@@ -4,6 +4,8 @@ import numpy as np
 from fpdf import FPDF
 from graphviz import Source
 import io
+import os
+import tempfile
 
 # ==============================================================================
 # --- Page Configuration & Styling ---
@@ -186,17 +188,17 @@ TP,7
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'AquaGenius - WWTP Design Report', 0, 1, 'C')
+        self.cell(0, 10, 'AquaGenius - WWTP Design Report', border=0, ln=1, align='C')
         self.ln(5)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+        self.cell(0, 10, f'Page {self.page_no()}', border=0, ln=0, align='C')
 
     def chapter_title(self, title):
         self.set_font('Arial', 'B', 12)
-        self.cell(0, 6, title, 0, 1, 'L')
+        self.cell(0, 6, title, border=0, ln=1, align='L')
         self.ln(4)
 
     def chapter_body(self, data):
@@ -216,12 +218,12 @@ class PDF(FPDF):
         self.set_font('Arial', 'B', 9)
         self.set_fill_color(220, 220, 220)
         for i, h in enumerate(header):
-            self.cell(col_widths[i], 7, h, 1, 0, 'C', 1)
+            self.cell(col_widths[i], 7, h, border=1, ln=0, align='C', fill=1)
         self.ln()
         self.set_font('Arial', '', 9)
         for row in data:
             for i, item in enumerate(row):
-                self.cell(col_widths[i], 6, str(item), 1)
+                self.cell(col_widths[i], 6, str(item), border=1, ln=0)
             self.ln()
         self.ln(5)
 
@@ -350,7 +352,7 @@ def calculate_scrubber_sizing(inputs):
     media_height = sizing['media_volume'] / vessel_area
     
     sizing['dimensions'] = {
-        'Scrubber Vessel': {'Diameter (m)': f"{vessel_diameter:.1f}", 'Media Height (m)': f"{media_height:.1f}"}
+        'Scrubber Vessel': calculate_tank_dimensions(vessel_area, shape='circ', depth=media_height)
     }
     sizing['recirculation_flow_m3_hr'] = inputs['air_flow_m3_hr'] * 0.01 # Heuristic
     sizing['effluent_targets'] = {'removal_eff': 99.0}
@@ -719,9 +721,14 @@ def generate_detailed_pdf_report(inputs, sizing, results):
     pdf.chapter_title("3. Process Flow Diagram")
     dot_string = generate_pfd_dot(inputs, sizing, results)
     s = Source(dot_string, format="png")
-    png_data = s.pipe()
-    with io.BytesIO(png_data) as png_file:
-        pdf.image(png_file, x=10, w=pdf.w - 20)
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_file:
+        s.render(os.path.splitext(tmp_file.name)[0], cleanup=True)
+        image_path = tmp_file.name
+    
+    pdf.image(image_path, x=10, w=pdf.w - 20)
+    os.remove(image_path)
+    
     pdf.ln(5)
 
     pdf.chapter_title("4. Performance & Operational Summary")
@@ -734,7 +741,7 @@ def generate_detailed_pdf_report(inputs, sizing, results):
             perf_data.append([param, f"{val:.2f}", unit])
     pdf.create_table(perf_header, perf_data, col_widths=[90, 45, 45])
 
-    return bytes(pdf.output(dest='S'))
+    return pdf.output(dest='S').encode('latin-1')
 
 def display_output(tech_name, inputs, sizing, results, rerun_key_prefix):
     """Renders the output for a single technology tab."""
@@ -747,7 +754,7 @@ def display_output(tech_name, inputs, sizing, results, rerun_key_prefix):
     col1, col2, col3, col4 = st.columns(4)
     if tech_name == 'Air Scrubber':
         col1.metric("Vessel Diameter", f"{sizing['dimensions']['Scrubber Vessel']['Diameter (m)']}", "m")
-        col2.metric("Media Height", f"{sizing['dimensions']['Scrubber Vessel']['Media Height (m)']}", "m")
+        col2.metric("Media Height", f"{sizing['dimensions']['Scrubber Vessel']['SWD (m)']}", "m")
         col3.metric("H2S Removal", f"{results['H2S Removal Efficiency (%)']:.1f}", "%")
         col4.metric("NH3 Removal", f"{results['NH3 Removal Efficiency (%)']:.1f}", "%")
     elif tech_name == 'Solids Handling':
@@ -770,7 +777,16 @@ def display_output(tech_name, inputs, sizing, results, rerun_key_prefix):
         pfd_dot_string = generate_pfd_dot(inputs, sizing, results)
         st.graphviz_chart(pfd_dot_string)
 
-        if tech_name not in ['Air Scrubber', 'Solids Handling']:
+        if tech_name in ['Solids Handling', 'Air Scrubber']:
+            st.subheader("Equipment Dimensions")
+            dims_data = []
+            for tank, dims in sizing['dimensions'].items():
+                row = {'Unit': tank}
+                row.update(dims)
+                dims_data.append(row)
+            st.dataframe(pd.DataFrame(dims_data).set_index('Unit'))
+        
+        if tech_name not in ['Air Scrubber', 'Solids Handling', 'MBBR']:
             st.subheader("Tank Dimensions")
             dims_data = []
             for tank, dims in sizing['dimensions'].items():
@@ -781,9 +797,9 @@ def display_output(tech_name, inputs, sizing, results, rerun_key_prefix):
 
             st.subheader("Pump & Blower Sizing")
             pump_data = {
-                "EQ Pump": {"Design Flow (m³/hr)": results['EQ Peak Pump Rate (m³/hr)'], "Design Pressure (psi)": 5, "Valve Cv": results['EQ Valve Cv']},
-                "RAS Pump": {"Design Flow (m³/hr)": results['RAS Design Flow (m³/hr)'], "Design Pressure (psi)": 5, "Valve Cv": results['RAS Valve Cv']},
-                "WAS Pump": {"Design Flow (m³/hr)": results['WAS Design Flow (m³/hr)'], "Design Pressure (psi)": 5, "Valve Cv": results['WAS Valve Cv']}
+                "EQ Pump": {"Design Flow (m³/hr)": results['EQ Peak Pump Rate (m³/hr)'], "Design Pressure (psi)": 20, "Valve Cv": results['EQ Valve Cv']},
+                "RAS Pump": {"Design Flow (m³/hr)": results['RAS Design Flow (m³/hr)'], "Design Pressure (psi)": 20, "Valve Cv": results['RAS Valve Cv']},
+                "WAS Pump": {"Design Flow (m³/hr)": results['WAS Design Flow (m³/hr)'], "Design Pressure (psi)": 20, "Valve Cv": results['WAS Valve Cv']}
             }
             st.dataframe(pd.DataFrame(pump_data).T.style.format("{:.2f}"))
         elif tech_name == 'Air Scrubber':
