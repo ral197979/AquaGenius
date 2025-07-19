@@ -1,560 +1,366 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AquaGenius WWTP Designer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://d3js.org/d3.v5.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/d3-graphviz@3.1.0/build/d3-graphviz.js"></script>
+import streamlit as st
+import pandas as pd
+import numpy as np
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #F0F2F6;
-        }
-        .tab-button {
-            padding: 10px 20px;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            color: #4B5563;
-        }
-        .tab-button.active {
-            color: #0068C9;
-            border-bottom-color: #0068C9;
-        }
-        .metric-card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 1.5rem;
-            border: 1px solid #E5E7EB;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-        }
-        .metric-title {
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #6B7280;
-        }
-        .metric-value {
-            font-size: 1.875rem;
-            font-weight: 700;
-            color: #1F2937;
-        }
-        .btn-primary {
-            background-color: #0068C9;
-            color: white;
-            border-radius: 8px;
-            padding: 0.75rem 1.5rem;
-            font-weight: 600;
-            transition: background-color 0.2s ease-in-out;
-        }
-        .btn-primary:hover {
-            background-color: #0055A4;
-        }
-        .btn-secondary {
-            background-color: #E5E7EB;
-            color: #1F2937;
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            font-weight: 500;
-            transition: background-color 0.2s ease-in-out;
-        }
-        .btn-secondary:hover {
-            background-color: #D1D5DB;
-        }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #0068C9;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        .form-checkbox {
-            appearance: none;
-            background-color: #fff;
-            border: 1px solid #d1d5db;
-            padding: 9px;
-            border-radius: 4px;
-            display: inline-block;
-            position: relative;
-        }
-        .form-checkbox:checked {
-            background-color: #0068C9;
-            border-color: #0068C9;
-        }
-        .form-checkbox:checked:after {
-            content: '\\2714';
-            font-size: 14px;
-            position: absolute;
-            top: 0px;
-            left: 3px;
-            color: white;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body class="flex flex-col lg:flex-row h-screen">
+# ==============================================================================
+# --- Page Configuration & Styling ---
+# ==============================================================================
+st.set_page_config(
+    page_title="AquaGenius WWTP Designer",
+    page_icon="🌊",
+    layout="wide"
+)
 
-    <!-- Sidebar -->
-    <aside class="w-full lg:w-1/4 bg-white p-6 border-r border-gray-200 overflow-y-auto">
-        <div class="flex items-center mb-6">
-            <span class="text-4xl mr-3">🌊</span>
-            <div>
-                <h1 class="text-xl font-bold text-gray-800">AquaGenius</h1>
-                <p class="text-sm text-gray-500">WWTP Designer</p>
-            </div>
+st.markdown("""
+    <div style="display: flex; align-items: center; margin-bottom: 20px;">
+        <span style="font-size: 40px; margin-right: 15px;">🌊</span>
+        <div>
+            <h1 style="margin: 0; padding: 0; color: #1F2937;">AquaGenius WWTP Designer</h1>
+            <p style="margin: 0; padding: 0; color: #555;">A Preliminary Design & Simulation Tool for Wastewater Treatment</p>
         </div>
-        
-        <h2 class="text-lg font-semibold text-gray-700 mb-4">⚙️ Influent Design Criteria</h2>
+    </div>
+""", unsafe_allow_html=True)
 
-        <div class="mb-4">
-            <label for="flow_unit" class="block text-sm font-medium text-gray-700 mb-1">Unit System</label>
-            <select id="flow_unit" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                <option value="m3_day">Metric (m³/day)</option>
-                <option value="MGD">US Customary (MGD)</option>
-                <option value="MLD">SI (MLD)</option>
-            </select>
-        </div>
-        
-        <div class="mb-4">
-            <div class="flex justify-between items-baseline mb-1">
-                <label for="avg_flow" class="block text-sm font-medium text-gray-700">Average Influent Flow</label>
-                <span id="flow_unit_display" class="text-sm text-gray-500"></span>
-            </div>
-            <input type="number" id="avg_flow" value="10000" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-        </div>
 
-        <div class="mb-4">
-             <div class="flex justify-between items-baseline mb-1">
-                <label for="avg_bod" class="block text-sm font-medium text-gray-700">Average Influent BOD</label>
-                <span class="text-sm text-gray-500">(mg/L)</span>
-            </div>
-            <input type="number" id="avg_bod" value="250" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-        </div>
+# ==============================================================================
+# --- Engineering Constants & Conversion Factors ---
+# ==============================================================================
+CONVERSION_FACTORS = {
+    'flow': {'MGD_to_m3_day': 3785.41, 'MLD_to_m3_day': 1000},
+    'volume': {'m3_to_gal': 264.172},
+    'area': {'m2_to_ft2': 10.7639},
+    'sor': {'m3_m2_day_to_gpd_ft2': 24.54}
+}
 
-        <div class="mb-4">
-            <div class="flex justify-between items-baseline mb-1">
-                <label for="avg_tss" class="block text-sm font-medium text-gray-700">Average Influent TSS</label>
-                <span class="text-sm text-gray-500">(mg/L)</span>
-            </div>
-            <input type="number" id="avg_tss" value="220" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-        </div>
-        
-        <div class="mb-4">
-            <div class="flex justify-between items-baseline mb-1">
-                <label for="avg_tkn" class="block text-sm font-medium text-gray-700">Average Influent TKN</label>
-                <span class="text-sm text-gray-500">(mg/L)</span>
-            </div>
-            <input type="number" id="avg_tkn" value="40" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-        </div>
+KINETIC_PARAMS = {
+    'Y': 0.6, 'kd': 0.06, 'fd': 0.15, 'TSS_VSS_ratio': 1.25
+}
 
-        <div class="mb-4">
-            <div class="flex justify-between items-baseline mb-1">
-                <label for="avg_tp" class="block text-sm font-medium text-gray-700">Average Influent TP</label>
-                <span class="text-sm text-gray-500">(mg/L)</span>
-            </div>
-            <input type="number" id="avg_tp" value="7" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-        </div>
+AERATION_PARAMS = {
+    'O2_demand_BOD': 1.5, 'O2_demand_N': 4.57, 'SOTE': 0.30,
+    'O2_in_air_mass_fraction': 0.232, 'air_density_kg_m3': 1.225
+}
 
-        <h2 class="text-lg font-semibold text-gray-700 my-4">🧪 Chemical Dosing</h2>
-        <div class="space-y-3">
-            <label class="flex items-center">
-                <input type="checkbox" id="use_alum" class="form-checkbox mr-2">
-                <span class="text-sm font-medium text-gray-700">Use Alum for P Removal</span>
-            </label>
-            <label class="flex items-center">
-                <input type="checkbox" id="use_methanol" class="form-checkbox mr-2">
-                <span class="text-sm font-medium text-gray-700">Use Carbon Source for N Removal</span>
-            </label>
-        </div>
-        
-        <button id="run_simulation_button" class="btn-primary w-full mt-6">Generate Design & Simulate</button>
-    </aside>
+CHEMICAL_FACTORS = {
+    'alum_to_p_ratio': 9.7, 'methanol_to_n_ratio': 2.86
+}
 
-    <!-- Main Content -->
-    <main class="w-full lg:w-3/4 p-6 overflow-y-auto">
-        <div class="tabs flex border-b border-gray-200 mb-6">
-            <button class="tab-button active" data-tab="cas">🔹 CAS</button>
-            <button class="tab-button" data-tab="ifas">🔸 IFAS</button>
-            <button class="tab-button" data-tab="mbr">🟢 MBR</button>
-            <button class="tab-button" data-tab="mbbr">🔺 MBBR</button>
-        </div>
+# ==============================================================================
+# --- Session State Initialization ---
+# ==============================================================================
+if 'simulation_results' not in st.session_state:
+    st.session_state.simulation_results = None
 
-        <div id="cas_content" class="tab-content"></div>
-        <div id="ifas_content" class="tab-content hidden"></div>
-        <div id="mbr_content" class="tab-content hidden"></div>
-        <div id="mbbr_content" class="tab-content hidden"></div>
-
-    </main>
+# ==============================================================================
+# --- Sidebar for User Inputs ---
+# ==============================================================================
+with st.sidebar:
+    st.header("⚙️ Influent Design Criteria")
     
-    <script>
-        // --- Constants and Global State ---
-        const CONVERSION_FACTORS = {
-            flow: { 'MGD_to_m3_day': 3785.41, 'MLD_to_m3_day': 1000 },
-            volume: { 'm3_to_gal': 264.172 },
-            area: { 'm2_to_ft2': 10.7639 },
-            pump_rate: { 'm3_hr_to_gpm': 4.40287 },
-            sor: { 'm3_m2_day_to_gpd_ft2': 24.54 }
-        };
+    flow_unit_name = st.selectbox(
+        "Unit System",
+        ('Metric (m³/day)', 'US Customary (MGD)', 'SI (MLD)'),
+        key='flow_unit_select'
+    )
 
-        const KINETIC_PARAMS = {
-            'Y': 0.6, 'kd': 0.06, 'fd': 0.15, 'TSS_VSS_ratio': 1.25
-        };
+    # Extract unit from selection for display
+    unit_display = flow_unit_name.split('(')[-1].replace(')', '')
 
-        const AERATION_PARAMS = {
-            'O2_demand_BOD': 1.5, 'O2_demand_N': 4.57, 'SOTE': 0.30,
-            'O2_in_air_mass_fraction': 0.232, 'air_density_kg_m3': 1.225
-        };
+    avg_flow_input = st.number_input(
+        f"Average Influent Flow ({unit_display})",
+        min_value=0.1, value=10000.0, step=100.0, format="%.2f"
+    )
+    
+    st.markdown("---")
+    
+    avg_bod = st.number_input("Average Influent BOD (mg/L)", 50, value=250, step=10)
+    avg_tss = st.number_input("Average Influent TSS (mg/L)", 50, value=220, step=10)
+    avg_tkn = st.number_input("Average Influent TKN (mg/L)", 10, value=40, step=5)
+    avg_tp = st.number_input("Average Influent TP (mg/L)", 1, value=7, step=1)
+
+    st.markdown("---")
+    st.header("🧪 Chemical Dosing")
+    use_alum = st.checkbox("Use Alum for P Removal")
+    use_methanol = st.checkbox("Use Carbon Source for N Removal")
+
+    run_button = st.button("Generate Design & Simulate", use_container_width=True)
+
+# ==============================================================================
+# --- Core Logic Functions (Translated from JS) ---
+# ==============================================================================
+def get_inputs():
+    """Gathers and processes all inputs from the sidebar."""
+    if 'MGD' in flow_unit_name:
+        avg_flow_m3_day = avg_flow_input * CONVERSION_FACTORS['flow']['MGD_to_m3_day']
+        flow_unit_short = 'MGD'
+    elif 'MLD' in flow_unit_name:
+        avg_flow_m3_day = avg_flow_input * CONVERSION_FACTORS['flow']['MLD_to_m3_day']
+        flow_unit_short = 'MLD'
+    else:
+        avg_flow_m3_day = avg_flow_input
+        flow_unit_short = 'm³/day'
+
+    return {
+        'flow_unit_name': flow_unit_name,
+        'flow_unit_short': flow_unit_short,
+        'avg_flow_input': avg_flow_input,
+        'avg_flow_m3_day': avg_flow_m3_day,
+        'avg_bod': avg_bod,
+        'avg_tss': avg_tss,
+        'avg_tkn': avg_tkn,
+        'avg_tp': avg_tp,
+        'use_alum': use_alum,
+        'use_methanol': use_methanol,
+    }
+
+def calculate_cas_sizing(inputs):
+    srt = 10
+    mlss = 3500
+    effluent_bod = 10.0
+    hrt = (srt * KINETIC_PARAMS['Y'] * (inputs['avg_bod'] - effluent_bod)) / (mlss * (1 + KINETIC_PARAMS['kd'] * srt)) * 24
+    total_volume = inputs['avg_flow_m3_day'] * hrt / 24
+    anoxic_fraction = 0.3
+    anoxic_volume = total_volume * anoxic_fraction
+    aerobic_volume = total_volume * (1 - anoxic_fraction)
+    clarifier_sor = 24
+    clarifier_area = inputs['avg_flow_m3_day'] / clarifier_sor
+    return {
+        'tech': 'CAS', 'srt': srt, 'mlss': mlss, 'hrt': hrt, 'total_volume': total_volume,
+        'anoxic_volume': anoxic_volume, 'aerobic_volume': aerobic_volume,
+        'clarifier_area': clarifier_area, 'clarifier_sor': clarifier_sor,
+        'effluent_targets': {'bod': 10, 'tss': 12, 'tkn': 8, 'tp': 2.0}
+    }
+
+def calculate_ifas_sizing(inputs):
+    srt = 8
+    mlss = 3000
+    media_fill = 0.4
+    ssa = 500
+    hrt = 6
+    total_volume = inputs['avg_flow_m3_day'] * hrt / 24
+    anoxic_volume = total_volume * 0.3
+    aerobic_volume = total_volume * 0.7
+    media_volume = aerobic_volume * media_fill
+    clarifier_sor = 28
+    clarifier_area = inputs['avg_flow_m3_day'] / clarifier_sor
+    return {
+        'tech': 'IFAS', 'srt': srt, 'mlss': mlss, 'hrt': hrt, 'total_volume': total_volume,
+        'anoxic_volume': anoxic_volume, 'aerobic_volume': aerobic_volume,
+        'clarifier_area': clarifier_area, 'clarifier_sor': clarifier_sor,
+        'media_volume': media_volume, 'ssa': ssa,
+        'effluent_targets': {'bod': 8, 'tss': 10, 'tkn': 5, 'tp': 1.5}
+    }
+
+def calculate_mbr_sizing(inputs):
+    srt = 15
+    mlss = 8000
+    hrt = 5
+    total_volume = inputs['avg_flow_m3_day'] * hrt / 24
+    anoxic_volume = total_volume * 0.4
+    aerobic_volume = total_volume * 0.6
+    membrane_flux = 20
+    membrane_area = (inputs['avg_flow_m3_day'] * 1000 / 24) / membrane_flux
+    return {
+        'tech': 'MBR', 'srt': srt, 'mlss': mlss, 'hrt': hrt, 'total_volume': total_volume,
+        'anoxic_volume': anoxic_volume, 'aerobic_volume': aerobic_volume,
+        'membrane_area': membrane_area, 'membrane_flux': membrane_flux,
+        'effluent_targets': {'bod': 5, 'tss': 1, 'tkn': 4, 'tp': 1.0}
+    }
+
+def calculate_mbbr_sizing(inputs):
+    hrt = 4
+    total_volume = inputs['avg_flow_m3_day'] * hrt / 24
+    aerobic_volume = total_volume
+    media_fill = 0.5
+    ssa = 500
+    media_volume = aerobic_volume * media_fill
+    bod_loading_rate = 5
+    required_media_area = (inputs['avg_flow_m3_day'] * inputs['avg_bod'] / 1000) / bod_loading_rate
+    required_media_volume = required_media_area / ssa
+    final_aerobic_volume = required_media_volume / media_fill
+    return {
+        'tech': 'MBBR', 'hrt': hrt, 'total_volume': final_aerobic_volume,
+        'aerobic_volume': final_aerobic_volume, 'media_volume': required_media_volume, 'ssa': ssa,
+        'effluent_targets': {'bod': 15, 'tss': 20, 'tkn': 10, 'tp': 2.5}
+    }
+
+def simulate_process(inputs, sizing):
+    effluent_targets = sizing['effluent_targets']
+    effluent_tkn = effluent_targets['tkn'] + (np.random.random() - 0.5) * 1
+    effluent_tp = effluent_targets['tp'] + (np.random.random() - 0.5) * 0.2
+    methanol_dose_kg = 0
+    alum_dose_kg = 0
+
+    if inputs['use_methanol']:
+        target_tkn = 2.0 if sizing['tech'] in ['MBR', 'IFAS'] else 3.0
+        n_to_remove = (effluent_tkn - target_tkn) * inputs['avg_flow_m3_day'] / 1000
+        if n_to_remove > 0:
+            methanol_dose_kg = n_to_remove * CHEMICAL_FACTORS['methanol_to_n_ratio']
+            effluent_tkn = target_tkn
+    
+    if inputs['use_alum']:
+        target_tp = 0.5 if sizing['tech'] == 'MBR' else 0.8
+        p_to_remove = (effluent_tp - target_tp) * inputs['avg_flow_m3_day'] / 1000
+        if p_to_remove > 0:
+            alum_dose_kg = p_to_remove * CHEMICAL_FACTORS['alum_to_p_ratio']
+            effluent_tp = target_tp
+            
+    effluent_bod = max(0, effluent_targets['bod'] + (np.random.random() - 0.5) * 3)
+    effluent_tss = max(0, effluent_targets['tss'] + (np.random.random() - 0.5) * 4)
+
+    bod_removed_kg_day = (inputs['avg_bod'] - effluent_bod) * inputs['avg_flow_m3_day'] / 1000
+    vss_produced = (KINETIC_PARAMS['Y'] * bod_removed_kg_day) / (1 + KINETIC_PARAMS['kd'] * sizing.get('srt', 10))
+    tss_produced = vss_produced * KINETIC_PARAMS['TSS_VSS_ratio']
+    
+    p_removed_chemically_kg_day = alum_dose_kg / CHEMICAL_FACTORS['alum_to_p_ratio'] if alum_dose_kg > 0 else 0
+    chemical_sludge = p_removed_chemically_kg_day * 4.5
+    total_sludge = tss_produced + chemical_sludge
+
+    was_flow_m3d = (total_sludge * 1000) / (0.8 * sizing.get('mlss', 3500)) if sizing['tech'] != 'MBBR' else 0
+    ras_flow_m3d = inputs['avg_flow_m3_day'] * 0.75 if sizing['tech'] != 'MBBR' else 0
+
+    n_removed_bio_kg_day = (inputs['avg_tkn'] - effluent_tkn) * inputs['avg_flow_m3_day'] / 1000
+    oxygen_demand_kg_day = (bod_removed_kg_day * AERATION_PARAMS['O2_demand_BOD']) + (n_removed_bio_kg_day * AERATION_PARAMS['O2_demand_N'])
+    required_air_m3_day = oxygen_demand_kg_day / (AERATION_PARAMS['SOTE'] * AERATION_PARAMS['O2_in_air_mass_fraction'] * AERATION_PARAMS['air_density_kg_m3'])
+    
+    return {
+        'Effluent BOD (mg/L)': effluent_bod, 'Effluent TSS (mg/L)': effluent_tss,
+        'Effluent TKN (mg/L)': effluent_tkn, 'Effluent TP (mg/L)': effluent_tp,
+        f'RAS Flow ({inputs["flow_unit_short"]})': ras_flow_m3d / (CONVERSION_FACTORS['flow'].get(f"{inputs['flow_unit_short']}_to_m3_day", 1) or 1),
+        f'WAS Flow ({inputs["flow_unit_short"]})': was_flow_m3d / (CONVERSION_FACTORS['flow'].get(f"{inputs['flow_unit_short']}_to_m3_day", 1) or 1),
+        'Alum Dose (kg/day)': alum_dose_kg, 'Carbon Source Dose (kg/day)': methanol_dose_kg,
+        'Total Sludge Production (kg TSS/day)': total_sludge,
+        'Required Airflow (m³/hr)': required_air_m3_day / 24
+    }
+
+def generate_pfd_dot(inputs, sizing, results):
+    """Generates a DOT string for the process flow diagram."""
+    tech = sizing['tech']
+    flow_unit_label = inputs['flow_unit_short']
+    
+    influent_label = (f"Influent\\nQ={inputs['avg_flow_input']:.1f} {flow_unit_label}\\n"
+                      f"BOD={inputs['avg_bod']} mg/L\\nTSS={inputs['avg_tss']} mg/L\\n"
+                      f"TKN={inputs['avg_tkn']} mg/L\\nTP={inputs['avg_tp']} mg/L")
+    
+    effluent_label = (f"Effluent\\nQ={inputs['avg_flow_input']:.1f} {flow_unit_label}\\n"
+                      f"BOD={results['Effluent BOD (mg/L)']:.1f} mg/L\\n"
+                      f"TSS={results['Effluent TSS (mg/L)']:.1f} mg/L\\n"
+                      f"TKN={results['Effluent TKN (mg/L)']:.1f} mg/L\\n"
+                      f"TP={results['Effluent TP (mg/L)']:.1f} mg/L")
+
+    dot = f"""
+    digraph G {{
+        rankdir=LR;
+        node [shape=box, style="rounded,filled", fillcolor="#EBF4FF", fontname="Inter"];
+        edge [fontname="Inter", fontsize=10];
         
-        const CHEMICAL_FACTORS = {
-            'alum_to_p_ratio': 9.7, 'methanol_to_n_ratio': 2.86
-        };
+        Influent [label="{influent_label}"];
+    """
+    
+    process_train = "EQ -> Anoxic -> Aerobic;" if tech != 'MBBR' else "EQ -> Aerobic;"
+    
+    dot += f"""
+        subgraph cluster_main {{
+            label = "{tech.upper()} Process";
+            style=filled;
+            color=lightgrey;
+            {process_train}
+        }}
+    """
+    
+    separator = "Clarifier" if tech != 'MBR' else "Membrane Tank"
+    
+    if tech != 'MBBR':
+        ras_flow = results[f'RAS Flow ({flow_unit_label})']
+        was_flow = results[f'WAS Flow ({flow_unit_label})']
+        dot += f'Aerobic -> {separator};'
+        dot += f'{separator} -> Effluent [label="{effluent_label}"];'
+        dot += f'{separator} -> WAS [style=dashed, label="WAS\\n{was_flow:.2f} {flow_unit_label}"];'
+        dot += f'{separator} -> RAS [style=dashed]; RAS -> Anoxic [style=dashed, label="RAS\\n{ras_flow:.1f} {flow_unit_label}"];'
+    else:
+        dot += f'Aerobic -> {separator}; {separator} -> Effluent [label="{effluent_label}"];'
+
+    if inputs['use_alum'] and results['Alum Dose (kg/day)'] > 0:
+        alum_dose = results['Alum Dose (kg/day)']
+        dot += f'Alum [shape=oval, fillcolor="#FEF3C7", label="Alum Dose\\n{alum_dose:.1f} kg/d"]; Alum -> Aerobic;'
+    
+    if inputs['use_methanol'] and results['Carbon Source Dose (kg/day)'] > 0:
+        methanol_dose = results['Carbon Source Dose (kg/day)']
+        dot += f'Methanol [shape=oval, fillcolor="#D1FAE5", label="Carbon Dose\\n{methanol_dose:.1f} kg/d"]; Methanol -> Anoxic;'
         
-        let state = {
-            results: {},
-            sizing: {}
-        };
+    dot += "Influent -> EQ; }"
+    return dot
 
-        // --- UI Element References ---
-        const runButton = document.getElementById('run_simulation_button');
-        const tabs = document.querySelectorAll('.tab-button');
-        const tabContents = document.querySelectorAll('.tab-content');
-        const flowUnitSelect = document.getElementById('flow_unit');
-        const flowUnitDisplay = document.getElementById('flow_unit_display');
+def display_output(tech_name, inputs, sizing, results):
+    """Renders the output for a single technology tab."""
+    st.header(f"{tech_name} Design Summary")
+    
+    # Sizing Metrics
+    is_us = 'US Customary' in inputs['flow_unit_name']
+    vol_unit = 'gal' if is_us else 'm³'
+    vol_factor = CONVERSION_FACTORS['volume']['m3_to_gal'] if is_us else 1
+    
+    col1, col2, col3, col4 = st.columns(4)
+    if 'total_volume' in sizing:
+        col1.metric("Total Basin Volume", f"{sizing['total_volume'] * vol_factor:,.0f} {vol_unit}")
+    if 'hrt' in sizing:
+        col2.metric("HRT", f"{sizing['hrt']:.1f} hours")
+    if 'srt' in sizing:
+        col3.metric("SRT", f"{sizing['srt']:.1f} days")
+    if 'Required Airflow (m³/hr)' in results:
+        col4.metric("Required Airflow", f"{results['Required Airflow (m³/hr)']:.0f} m³/hr")
 
-        // --- Event Listeners ---
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                tabContents.forEach(content => content.classList.add('hidden'));
-                document.getElementById(`${tab.dataset.tab}_content`).classList.remove('hidden');
-            });
-        });
+    # Process Flow Diagram
+    with st.container():
+        st.subheader("Process Flow Diagram")
+        pfd_dot_string = generate_pfd_dot(inputs, sizing, results)
+        st.graphviz_chart(pfd_dot_string)
 
-        runButton.addEventListener('click', runFullSimulation);
-        flowUnitSelect.addEventListener('change', updateFlowUnitDisplay);
+    # Performance Table
+    with st.container():
+        st.subheader("Performance & Operational Summary")
+        results_df = pd.DataFrame.from_dict(results, orient='index', columns=['Value'])
+        results_df = results_df[results_df['Value'] > 0.01] # Hide zero values
+        st.dataframe(results_df.style.format("{:,.2f}"))
 
-        // --- UI Helper Functions ---
-        function updateFlowUnitDisplay() {
-            const selectedOption = flowUnitSelect.options[flowUnitSelect.selectedIndex].text;
-            const unit = selectedOption.match(/\(([^)]+)\)/)[1]; // Extracts text in parentheses
-            flowUnitDisplay.textContent = `(${unit})`;
-        }
+# ==============================================================================
+# --- Main App Flow ---
+# ==============================================================================
+if run_button:
+    inputs = get_inputs()
+    all_results = {}
+    for tech in ['cas', 'ifas', 'mbr', 'mbbr']:
+        sizing_func = globals()[f"calculate_{tech}_sizing"]
+        sizing = sizing_func(inputs)
+        results = simulate_process(inputs, sizing)
+        all_results[tech] = {'sizing': sizing, 'results': results}
+    st.session_state.simulation_results = all_results
 
-        // --- Core Simulation Logic ---
-        function getInputs() {
-            const flowUnit = flowUnitSelect.value;
-            const avgFlowInput = parseFloat(document.getElementById('avg_flow').value);
-            
-            let avgFlowM3Day;
-            if (flowUnit === 'MGD') {
-                avgFlowM3Day = avgFlowInput * CONVERSION_FACTORS.flow.MGD_to_m3_day;
-            } else if (flowUnit === 'MLD') {
-                avgFlowM3Day = avgFlowInput * CONVERSION_FACTORS.flow.MLD_to_m3_day;
-            } else {
-                avgFlowM3Day = avgFlowInput;
-            }
-            
-            return {
-                flowUnit,
-                avgFlowInput,
-                avgFlowM3Day,
-                avgBod: parseFloat(document.getElementById('avg_bod').value),
-                avgTss: parseFloat(document.getElementById('avg_tss').value),
-                avgTkn: parseFloat(document.getElementById('avg_tkn').value),
-                avgTp: parseFloat(document.getElementById('avg_tp').value),
-                useAlum: document.getElementById('use_alum').checked,
-                useMethanol: document.getElementById('use_methanol').checked,
-            };
-        }
+if st.session_state.simulation_results:
+    inputs = get_inputs() # Re-get inputs to ensure units are current for display
+    
+    cas_tab, ifas_tab, mbr_tab, mbbr_tab = st.tabs([
+        "🔹 Conventional Activated Sludge (CAS)", 
+        "🔸 Integrated Fixed-Film (IFAS)", 
+        "🟢 Membrane Bioreactor (MBR)", 
+        "🔺 Moving Bed Biofilm (MBBR)"
+    ])
 
-        function runFullSimulation() {
-            const inputs = getInputs();
-            if (Object.values(inputs).some(val => typeof val === 'number' && isNaN(val))) {
-                alert("Please ensure all inputs are valid numbers.");
-                return;
-            }
-            
-            tabContents.forEach(tc => tc.innerHTML = '<div class="loader"></div>');
+    with cas_tab:
+        data = st.session_state.simulation_results['cas']
+        display_output('CAS', inputs, data['sizing'], data['results'])
+    
+    with ifas_tab:
+        data = st.session_state.simulation_results['ifas']
+        display_output('IFAS', inputs, data['sizing'], data['results'])
 
-            setTimeout(() => {
-                ['cas', 'ifas', 'mbr', 'mbbr'].forEach(tech => {
-                    const sizingFunc = window[`calculate${tech.toUpperCase()}Sizing`];
-                    state.sizing[tech] = sizingFunc(inputs);
-                    state.results[tech] = simulateProcess(inputs, state.sizing[tech], tech);
-                    renderOutput(tech, inputs, state.sizing[tech], state.results[tech]);
-                });
-            }, 500);
-        }
-
-        // --- Technology-Specific Sizing Calculations ---
-        function calculateCASSizing(inputs) {
-            const srt = 10; 
-            const mlss = 3500; 
-            const effluentBod = 10.0;
-            const hrt = (srt * KINETIC_PARAMS.Y * (inputs.avgBod - effluentBod)) / (mlss * (1 + KINETIC_PARAMS.kd * srt)) * 24;
-            const totalVolume = inputs.avgFlowM3Day * hrt / 24;
-            const anoxicFraction = 0.3;
-            const anoxicVolume = totalVolume * anoxicFraction;
-            const aerobicVolume = totalVolume * (1 - anoxicFraction);
-            const clarifierSor = 24;
-            const clarifierArea = inputs.avgFlowM3Day / clarifierSor;
-            
-            return {
-                tech: 'CAS', srt, mlss, hrt, totalVolume, anoxicVolume, aerobicVolume, clarifierArea, clarifierSor,
-                effluentTargets: { bod: 10, tss: 12, tkn: 8, tp: 2.0 } // Base targets without chemicals
-            };
-        }
+    with mbr_tab:
+        data = st.session_state.simulation_results['mbr']
+        display_output('MBR', inputs, data['sizing'], data['results'])
         
-        function calculateIFASSizing(inputs) {
-            const srt = 8;
-            const mlss = 3000;
-            const mediaFill = 0.4;
-            const ssa = 500;
-            const hrt = 6;
-            const totalVolume = inputs.avgFlowM3Day * hrt / 24;
-            const anoxicVolume = totalVolume * 0.3;
-            const aerobicVolume = totalVolume * 0.7;
-            const mediaVolume = aerobicVolume * mediaFill;
-            const clarifierSor = 28;
-            const clarifierArea = inputs.avgFlowM3Day / clarifierSor;
+    with mbbr_tab:
+        data = st.session_state.simulation_results['mbbr']
+        display_output('MBBR', inputs, data['sizing'], data['results'])
+else:
+    st.info("Please configure your influent criteria in the sidebar and click 'Generate Design & Simulate'.")
 
-            return {
-                tech: 'IFAS', srt, mlss, hrt, totalVolume, anoxicVolume, aerobicVolume, clarifierArea, clarifierSor, mediaVolume, ssa,
-                effluentTargets: { bod: 8, tss: 10, tkn: 5, tp: 1.5 }
-            };
-        }
-
-        function calculateMBRSizing(inputs) {
-            const srt = 15;
-            const mlss = 8000;
-            const hrt = 5;
-            const totalVolume = inputs.avgFlowM3Day * hrt / 24;
-            const anoxicVolume = totalVolume * 0.4;
-            const aerobicVolume = totalVolume * 0.6;
-            const membraneFlux = 20;
-            const membraneArea = (inputs.avgFlowM3Day * 1000 / 24) / membraneFlux;
-
-            return {
-                tech: 'MBR', srt, mlss, hrt, totalVolume, anoxicVolume, aerobicVolume, membraneArea, membraneFlux,
-                effluentTargets: { bod: 5, tss: 1, tkn: 4, tp: 1.0 }
-            };
-        }
-
-        function calculateMBBRSizing(inputs) {
-            const hrt = 4;
-            const totalVolume = inputs.avgFlowM3Day * hrt / 24;
-            const aerobicVolume = totalVolume;
-            const mediaFill = 0.5;
-            const ssa = 500;
-            const mediaVolume = aerobicVolume * mediaFill;
-            const bodLoadingRate = 5;
-            const requiredMediaArea = (inputs.avgFlowM3Day * inputs.avgBod / 1000) / bodLoadingRate;
-            const requiredMediaVolume = requiredMediaArea / ssa;
-            const finalAerobicVolume = requiredMediaVolume / mediaFill;
-
-            return {
-                tech: 'MBBR', hrt, totalVolume: finalAerobicVolume, aerobicVolume: finalAerobicVolume, mediaVolume: requiredMediaVolume, ssa,
-                effluentTargets: { bod: 15, tss: 20, tkn: 10, tp: 2.5 }
-            };
-        }
-
-        // --- Generic Simulation & Rendering ---
-        function simulateProcess(inputs, sizing, tech) {
-            const { avgFlowM3Day, avgBod, avgTkn, avgTp, useAlum, useMethanol } = inputs;
-            const { srt, mlss, effluentTargets } = sizing;
-
-            let effluentTkn = effluentTargets.tkn + (Math.random() - 0.5) * 1;
-            let effluentTp = effluentTargets.tp + (Math.random() - 0.5) * 0.2;
-            let methanolDoseKg = 0;
-            let alumDoseKg = 0;
-
-            if (useMethanol) {
-                const targetTkn = (tech === 'MBR' || tech === 'IFAS') ? 2.0 : 3.0;
-                const nToRemove = (effluentTkn - targetTkn) * avgFlowM3Day / 1000;
-                if (nToRemove > 0) {
-                    methanolDoseKg = nToRemove * CHEMICAL_FACTORS.methanol_to_n_ratio;
-                    effluentTkn = targetTkn;
-                }
-            }
-            if (useAlum) {
-                const targetTp = (tech === 'MBR') ? 0.5 : 0.8;
-                const pToRemove = (effluentTp - targetTp) * avgFlowM3Day / 1000;
-                if (pToRemove > 0) {
-                    alumDoseKg = pToRemove * CHEMICAL_FACTORS.alum_to_p_ratio;
-                    effluentTp = targetTp;
-                }
-            }
-            
-            const effluentBod = Math.max(0, effluentTargets.bod + (Math.random() - 0.5) * 3);
-            const effluentTss = Math.max(0, effluentTargets.tss + (Math.random() - 0.5) * 4);
-
-            const bodRemovedKgDay = (avgBod - effluentBod) * avgFlowM3Day / 1000;
-            const vssProduced = (KINETIC_PARAMS.Y * bodRemovedKgDay) / (1 + KINETIC_PARAMS.kd * (srt || 10));
-            const tssProduced = vssProduced * KINETIC_PARAMS.TSS_VSS_ratio;
-            
-            const pRemovedChemicallyKgDay = (alumDoseKg > 0) ? alumDoseKg / CHEMICAL_FACTORS.alum_to_p_ratio : 0;
-            const chemicalSludge = pRemovedChemicallyKgDay * 4.5;
-            const totalSludge = tssProduced + chemicalSludge;
-
-            const wasFlowM3d = (tech !== 'mbbr') ? (totalSludge * 1000) / (0.8 * (mlss || 3500)) : 0;
-            const rasFlowM3d = (tech !== 'mbbr') ? avgFlowM3Day * 0.75 : 0;
-
-            const nRemovedBioKgDay = (avgTkn - effluentTkn) * avgFlowM3Day / 1000;
-            const oxygenDemandKgDay = (bodRemovedKgDay * AERATION_PARAMS.O2_demand_BOD) + (nRemovedBioKgDay * AERATION_PARAMS.O2_demand_N);
-            const requiredAirM3Day = oxygenDemandKgDay / (AERATION_PARAMS.SOTE * AERATION_PARAMS.O2_in_air_mass_fraction * AERATION_PARAMS.air_density_kg_m3);
-            
-            return {
-                effluentBod, effluentTss, effluentTkn, effluentTp,
-                wasFlowM3d, rasFlowM3d, alumDoseKg, methanolDoseKg, totalSludge,
-                oxygenDemandKgDay, requiredAirM3Day
-            };
-        }
-
-        function renderOutput(tech, inputs, sizing, results) {
-            const container = document.getElementById(`${tech}_content`);
-            const { flowUnit } = inputs;
-
-            // --- Convert units for display ---
-            const displaySizing = {};
-            const displayResults = {};
-            const isUS = flowUnit === 'MGD';
-            const flowDivisor = isUS ? CONVERSION_FACTORS.flow.MGD_to_m3_day : (flowUnit === 'MLD' ? CONVERSION_FACTORS.flow.MLD_to_m3_day : 1);
-
-            for (const [key, value] of Object.entries(sizing)) {
-                let newKey = key;
-                let newValue = value;
-                if (isUS) {
-                    if (key.includes('Volume')) { newKey = key.replace('m³', 'gal'); newValue *= CONVERSION_FACTORS.volume.m3_to_gal; }
-                    if (key.includes('Area')) { newKey = key.replace('m²', 'ft²'); newValue *= CONVERSION_FACTORS.area.m2_to_ft2; }
-                    if (key.includes('Sor')) { newKey = key.replace('m³/m²/day', 'gpd/ft²'); newValue *= CONVERSION_FACTORS.sor.m3_m2_day_to_gpd_ft2; }
-                }
-                displaySizing[newKey] = newValue;
-            }
-
-            for (const [key, value] of Object.entries(results)) {
-                 let newKey = key;
-                 let newValue = value;
-                 if(key.includes('Flow')){
-                     newValue /= flowDivisor;
-                 }
-                 displayResults[newKey] = newValue;
-            }
-
-            const flowUnitLabel = isUS ? 'MGD' : (flowUnit === 'MLD' ? 'MLD' : 'm³/day');
-            
-            // --- Generate HTML ---
-            let html = `<h2 class="text-2xl font-bold text-gray-800 mb-4">${tech.toUpperCase()} Design Summary</h2>`;
-            
-            // Sizing Cards
-            html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">';
-            const sizingMetrics = {
-                'Total Basin Volume': { value: displaySizing.totalVolume, unit: isUS ? 'gal' : 'm³' },
-                'HRT': { value: displaySizing.hrt, unit: 'hours' },
-                'SRT': { value: displaySizing.srt, unit: 'days' },
-                'Required Airflow': { value: results.requiredAirM3Day / 24, unit: 'm³/hr' },
-            };
-             for(const [key, val] of Object.entries(sizingMetrics)){
-                if(val.value !== undefined) {
-                    html += `<div class="metric-card"><div class="metric-title">${key}</div><div class="metric-value">${val.value.toLocaleString(undefined, {maximumFractionDigits: 1})} <span class="text-lg font-medium">${val.unit}</span></div></div>`;
-                }
-            }
-            html += '</div>';
-
-            // PFD
-            html += `<div class="bg-white p-4 rounded-lg shadow-sm border mb-6"><h3 class="font-semibold text-lg mb-2">Process Flow Diagram</h3><div id="pfd_${tech}" class="w-full h-96"></div></div>`;
-            
-            // Results Table
-            html += `<div class="bg-white p-4 rounded-lg shadow-sm border"><h3 class="font-semibold text-lg mb-2">Performance & Operational Summary</h3>
-                        <table class="w-full text-sm text-left text-gray-500">
-                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                                <tr><th class="px-6 py-3">Parameter</th><th class="px-6 py-3">Value</th><th class="px-6 py-3">Units</th></tr>
-                            </thead><tbody>`;
-            const tableRows = {
-                'Effluent BOD': { value: results.effluentBod, unit: 'mg/L' },
-                'Effluent TSS': { value: results.effluentTss, unit: 'mg/L' },
-                'Effluent TKN': { value: results.effluentTkn, unit: 'mg/L' },
-                'Effluent TP': { value: results.effluentTp, unit: 'mg/L' },
-                'RAS Flow': { value: displayResults.rasFlowM3d, unit: flowUnitLabel },
-                'WAS Flow': { value: displayResults.wasFlowM3d, unit: flowUnitLabel },
-                'Alum Dose': { value: results.alumDoseKg, unit: 'kg/day' },
-                'Carbon Source Dose': { value: results.methanolDoseKg, unit: 'kg/day' },
-                'Total Sludge Production': { value: results.totalSludge, unit: 'kg TSS/day' },
-            };
-            for(const [key, val] of Object.entries(tableRows)){
-                 if(val.value > 0.01) { // Only show relevant rows
-                    html += `<tr class="bg-white border-b"><td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${key}</td><td class="px-6 py-4">${val.value.toFixed(2)}</td><td class="px-6 py-4">${val.unit}</td></tr>`;
-                 }
-            }
-            html += `</tbody></table></div>`;
-            
-            container.innerHTML = html;
-
-            // --- Render PFD ---
-            const pfdDot = generatePfdDot(tech, inputs, displaySizing, displayResults, flowUnitLabel);
-            d3.select(`#pfd_${tech}`).graphviz().renderDot(pfdDot);
-        }
-
-        function generatePfdDot(tech, inputs, sizing, results, flowUnitLabel) {
-            const { avgFlowInput, avgBod, avgTss, avgTkn, avgTp, useAlum, useMethanol } = inputs;
-            const { effluentBod, effluentTss, effluentTkn, effluentTp, rasFlowM3d, wasFlowM3d, alumDoseKg, methanolDoseKg } = results;
-
-            let dot = `digraph G {
-                rankdir=LR;
-                node [shape=box, style="rounded,filled", fillcolor="#EBF4FF", fontname="Inter"];
-                edge [fontname="Inter", fontsize=10];
-                
-                Influent [label="Influent\\nQ=${avgFlowInput.toFixed(1)} ${flowUnitLabel}\\nBOD=${avgBod} mg/L\\nTSS=${avgTss} mg/L\\nTKN=${avgTkn} mg/L\\nTP=${avgTp} mg/L"];
-            `;
-            
-            const effluentLabel = `Effluent\\nQ=${avgFlowInput.toFixed(1)} ${flowUnitLabel}\\nBOD=${effluentBod.toFixed(1)} mg/L\\nTSS=${effluentTss.toFixed(1)} mg/L\\nTKN=${effluentTkn.toFixed(1)} mg/L\\nTP=${effluentTp.toFixed(1)} mg/L`;
-            
-            let processTrain = `EQ -> Anoxic -> Aerobic;`;
-            if (tech === 'mbbr') processTrain = `EQ -> Aerobic;`;
-
-            dot += `
-                subgraph cluster_main {
-                    label = "${tech.toUpperCase()} Process";
-                    style=filled;
-                    color=lightgrey;
-                    ${processTrain}
-                }
-            `;
-
-            if (tech !== 'mbbr') {
-                dot += `Aerobic -> Clarifier;`;
-                dot += `Clarifier -> Effluent [label="${effluentLabel}"];`;
-                dot += `Clarifier -> WAS [style=dashed, label="WAS\\n${wasFlowM3d.toFixed(2)} ${flowUnitLabel}"];`;
-                dot += `Clarifier -> RAS [style=dashed]; RAS -> Anoxic [style=dashed, label="RAS\\n${rasFlowM3d.toFixed(1)} ${flowUnitLabel}"];`;
-            } else {
-                 dot += `Aerobic -> Clarifier; Clarifier -> Effluent [label="${effluentLabel}"];`;
-            }
-
-            if (useAlum && alumDoseKg > 0) {
-                dot += `Alum [shape=oval, fillcolor="#FEF3C7", label="Alum Dose\\n${alumDoseKg.toFixed(1)} kg/d"]; Alum -> Aerobic;`;
-            }
-            if (useMethanol && methanolDoseKg > 0) {
-                dot += `Methanol [shape=oval, fillcolor="#D1FAE5", label="Carbon Dose\\n${methanolDoseKg.toFixed(1)} kg/d"]; Methanol -> Anoxic;`;
-            }
-            
-            dot += `Influent -> EQ; }`;
-            return dot;
-        }
-
-        // --- Initial UI Setup ---
-        updateFlowUnitDisplay();
-
-    </script>
-</body>
-</html>
